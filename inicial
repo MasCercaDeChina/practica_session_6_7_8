@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juego de pronunciación mandarín</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f5f5f5; color:#111; }
+  h1 { text-align:center; }
+  #gameContent { max-width:700px; margin:20px auto; background:#fff; padding:20px; border-radius:10px; box-shadow:0 6px 18px rgba(12,20,40,0.04);}
+  .option-button { display:block; width:100%; margin:8px 0; padding:10px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-size:16px; }
+  .option-button.correct { background:#15803d; color:#fff; }
+  .option-button.incorrect { background:#b91c1c; color:#fff; }
+  #feedback { text-align:center; margin-top:10px; font-weight:bold; }
+  #nextButton { margin-top:15px; padding:10px 15px; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; border:none; border-radius:8px; cursor:pointer; }
+  .panda-center { display:flex; flex-direction:column; align-items:center; font-size:48px; margin-top:20px; }
+  .panda-text { font-size:24px; margin-top:5px; }
+  #progressFill { height:10px; background:#667eea; width:0%; border-radius:5px; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<h1>Juego de pronunciación mandarín</h1>
+<div id="gameContent">
+  Escucha el audio y selecciona la respuesta correcta
+  <div id="optionsGrid"></div>
+  <div id="feedback"></div>
+  <div id="pandaCelebration"></div>
+  <button id="nextButton" style="display:none;" onclick="nextQuestion()">Siguiente</button>
+  <div id="progressFill"></div>
+</div>
+
+<script>
+(() => {
+  const questions = [
+    {
+      id: 'q1',
+      shortTitle: 'Sílaba',
+      text: '¿Qué debe tener una sílaba en mandarín?',
+      options: [
+        'Al menos una vocal y una consonante',
+        'Al menos una vocal compuesta',
+        'Al menos una vocal'
+      ],
+      correct: 0
+    },
+    {
+      id: 'q2',
+      shortTitle: 'Marcas tonales',
+      text: '¿Dónde se colocan las marcas tonales?',
+      options: [
+        'En la vocal más fuerte',
+        'En la primera vocal',
+        'En la primera consonante'
+      ],
+      correct: 0
+    },
+    {
+      id: 'q3',
+      shortTitle: '一',
+      text: '¿Qué pasa con 一 si está antes de una sílaba de 1º, 2º y 3º tono?',
+      options: [
+        'Cambia a 1º tono',
+        'Cambia a 2º tono',
+        'Cambia a 4º tono'
+      ],
+      correct: 2
+    },
+    {
+      id: 'q4',
+      shortTitle: 'Vocal ie',
+      text: 'La vocal compuesta "ie" se puede escribir así (ie) en pinyin?',
+      options: [
+        'Sí, si le precede una "y"',
+        'Sí, si le precede una consonante',
+        'No, en pinyin solo existe "ye"'
+      ],
+      correct: 2
+    }
+  ];
+
+  let currentQuestionIndex = 0;
+  let answered = false;
+  let selectedAnswer = null;
+  let questionAttempts = {};
+  let correctAnswers = 0;
+  let firstTryCorrectCount = 0;
+  let firstTryCorrectByQuestion = {};
+
+  function showPandaCelebration() {
+    const container = document.getElementById('pandaCelebration');
+    if (!container) return;
+    container.innerHTML = '';
+    const pandaWrap = document.createElement('div');
+    pandaWrap.className = 'panda-center';
+    pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
+    container.appendChild(pandaWrap);
+  }
+
+  function renderOptionsGrid() {
+    const g = document.getElementById('optionsGrid');
+    if(!g) return;
+    const question = questions[currentQuestionIndex];
+    g.innerHTML = `<h2>${question.text}</h2>` + question.options.map((o,i)=>
+      `<button class="option-button" id="option${i}" onclick="selectAnswer(${i})">${o}</button>`).join('');
+    document.querySelectorAll('.option-button').forEach(b=>b.disabled=false);
+  }
+
+  window.selectAnswer = function(index) {
+    const question = questions[currentQuestionIndex];
+    const correctAnswerIndex = question.correct;
+    questionAttempts[question.id] = (questionAttempts[question.id] || 0) + 1;
+    const isCorrect = index === correctAnswerIndex;
+    selectedAnswer = index;
+    const buttons = document.querySelectorAll('.option-button');
+    buttons.forEach(btn => btn.disabled = true);
+    const selectedButton = document.getElementById(`option${index}`);
+    if (selectedButton) selectedButton.classList.add(isCorrect ? 'correct' : 'incorrect');
+    const feedback = document.getElementById('feedback');
+
+    if (isCorrect) {
+      correctAnswers++;
+      const firstTry = questionAttempts[question.id] === 1;
+      if (firstTry && !firstTryCorrectByQuestion[question.id]) {
+        firstTryCorrectCount++;
+        firstTryCorrectByQuestion[question.id] = true;
+      }
+      answered = true;
+      if (feedback) feedback.textContent = '';
+      showPandaCelebration();
+      document.getElementById('nextButton').style.display = 'inline-block';
+    } else {
+      if (feedback) feedback.textContent = 'Vuelve a intentarlo';
+      setTimeout(() => {
+        if (feedback) feedback.textContent = '';
+        if (selectedButton) selectedButton.classList.remove('incorrect');
+        renderOptionsGrid();
+        selectedAnswer = null;
+      }, 900);
+    }
+  };
+
+  window.nextQuestion = function() {
+    currentQuestionIndex++;
+    document.getElementById('pandaCelebration').innerHTML = '';
+    document.getElementById('nextButton').style.display = 'none';
+    if (currentQuestionIndex < questions.length) renderOptionsGrid();
+    else showResults();
+  };
+
+  function showResults() {
+    const content = document.getElementById('gameContent');
+    const totalAttempts = Object.values(questionAttempts).reduce((a,b)=>a+b,0);
+    const perQuestionLines = questions.map((q, idx) => {
+      const attempts = questionAttempts[q.id] || 0;
+      return `<div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:#fff;margin-bottom:8px;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+                <div><strong>Pregunta ${idx+1} (${q.shortTitle}):</strong></div>
+                <div style="font-weight:700;color:#334155">${attempts}</div>
+              </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div style="text-align:center;padding:26px;">
+        <div style="font-size:64px">🐼🎉</div>
+        <h2 style="margin:8px 0 6px">¡Juego completado!</h2>
+        <div style="margin-top:18px;text-align:left;max-width:720px;margin-left:auto;margin-right:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:12px;background:linear-gradient(90deg,#f8fafc,#ffffff);box-shadow:0 10px 30px rgba(11,22,48,0.04);margin-bottom:12px">
+            <div>
+              <div style="font-size:13px;color:#94a3b8">Respuestas acertadas</div>
+              <div style="font-size:28px;font-weight:800;color:#667eea">${firstTryCorrectCount}/${questions.length}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;color:#94a3b8">Intentos totales</div>
+              <div style="font-size:22px;font-weight:700;color:#2d3748">${totalAttempts}</div>
+            </div>
+          </div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:8px">Detalle intentos:</div>
+          ${perQuestionLines}
+        </div>
+        <div style="margin-top:18px"><button onclick="restartGame()" style="padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;cursor:pointer">Jugar de nuevo</button></div>
+      </div>
+    `;
+  }
+
+  window.restartGame = function() {
+    currentQuestionIndex = 0;
+    questionAttempts = {};
+    correctAnswers = 0;
+    firstTryCorrectCount = 0;
+    firstTryCorrectByQuestion = {};
+    answered = false;
+    selectedAnswer = null;
+    renderOptionsGrid();
+  };
+
+  // Inicialitzar
+  renderOptionsGrid();
+})();
+</script>
+</body>
+</html>
