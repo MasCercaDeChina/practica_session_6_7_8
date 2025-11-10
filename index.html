@@ -29,11 +29,29 @@
     .progress-fill{height:100%;background:linear-gradient(90deg,var(--bg-a),var(--bg-b));width:0%;transition:width .35s ease;border-radius:999px}
 
     .card{background:#fbfdff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(11,22,48,0.03)}
-    .question-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px}
-    .options-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .option-button{padding:12px 14px;border-radius:12px;border:1px solid #e6eefc;background:#fff;font-weight:600;color:var(--text);cursor:pointer;text-align:left;transition:transform .12s, box-shadow .12s;box-shadow:0 6px 18px rgba(11,22,48,0.03)}
-    .option-button:hover:not(:disabled){transform:translateY(-3px)}
-    .option-button[disabled]{opacity:.52;cursor:not-allowed}
+    .question-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:16px} /* más espacio */
+    .options-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px} /* más separación */
+
+    /* botones de opción: menos "altos", más anchos, más redondeados */
+    .option-button{
+      padding:12px 18px;
+      border-radius:18px;
+      border:1px solid #e6eefc;
+      background:#fff;
+      font-weight:700;
+      color:var(--text);
+      cursor:pointer;
+      text-align:center;
+      transition:transform .12s, box-shadow .12s;
+      box-shadow:0 8px 20px rgba(11,22,48,0.04);
+      min-height:54px;             /* no demasiado altos */
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      line-height:1.15;
+    }
+    .option-button:hover:not(:disabled){transform:translateY(-4px)}
+    .option-button[disabled]{opacity:.56;cursor:not-allowed}
     .option-button.correct{background:var(--ok);border-color:var(--ok);color:#fff}
     .option-button.incorrect{background:var(--err);border-color:var(--err);color:#fff}
 
@@ -58,6 +76,10 @@
     .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:200; }
     .password-card { background: white; padding: 18px; border-radius: 12px; width: 92%; max-width: 480px; text-align: left; box-shadow: 0 12px 40px rgba(0,0,0,0.4); position:relative; }
 
+    /* confetti */
+    .confetti { position: absolute; width: 9px; height: 9px; border-radius:2px; z-index:99; animation:confettiFall linear forwards; pointer-events:none; }
+    @keyframes confettiFall { 0%{ transform: translateY(-30px) rotate(0); opacity:1 } 100%{ transform: translateY(160px) rotate(360deg); opacity:0 } }
+
     /* responsive */
     @media (max-width:720px){
       .options-grid{grid-template-columns:1fr}
@@ -69,13 +91,13 @@
   <div class="container" id="mainContainer" aria-live="polite">
     <div class="header">
       <div>
-        <div class="title" id="gameTitle">Quiz: Pinyin & tonos</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="title" id="gameTitle">Quiz: Pinyin & tonos</div>
+          <button id="jingleToggle" title="Activar jingle" style="background:transparent;border:none;color:#475569;cursor:pointer;font-size:14px;padding:6px;border-radius:8px">🔔</button>
+        </div>
         <div class="subtitle" id="instructionsText">Responde las preguntas. La profesora recibirá los resultados.</div>
       </div>
       <div id="adminControls" style="visibility:hidden; display:flex; gap:8px; align-items:center;">
-        <button class="small-btn" id="exportAudiosBtn">Estado audios</button>
-        <button class="small-btn" id="downloadResultsBtn">Info resultados</button>
-        <button class="small-btn" id="downloadCsvBtn">Exportar CSV</button>
         <button class="small-btn" id="showAdminResultsBtn">Ver resultados</button>
         <button class="small-btn" id="openGameBtn">Abrir juego</button>
       </div>
@@ -127,8 +149,6 @@
     </div>
   </div>
 
-  <div id="pandaCelebration" style="position:relative"></div>
-
   <script>
   (function(){
     'use strict';
@@ -141,7 +161,7 @@
 
     /* ========== PREGUNTAS (sense àudio) ========= */
     const questions = [
-      { id: 'q1', shortTitle: 'Sílaba', text: '¿Qué debe tener una sílaba en mandarín?', options: ['Al menos una vocal y una consonante','Al menos una vocal compuesta','Al menos una vocal'], correct:2 },
+      { id: 'q1', shortTitle: 'Sílaba', text: '¿Qué debe tener una sílaba en mandarín?', options: ['Al menos una vocal y una consonante','Al menos una vocal compuesta','Al menos una vocal'], correct:0 },
       { id: 'q2', shortTitle: 'Marcas tonales', text: '¿Dónde se colocan las marcas tonales?', options: ['En la vocal más fuerte','En la primera vocal','En la primera consonante'], correct:0 },
       { id: 'q3', shortTitle: '一', text: '¿Qué pasa con 一 si está antes de una sílaba de 1º, 2º y 3º tono?', options: ['Cambia a 1º tono','Cambia a 2º tono','Cambia a 4º tono'], correct:2 },
       { id: 'q4', shortTitle: 'Vocal ie', text: 'La vocal compuesta \"ie\" se puede escribir así (ie) en pinyin?', options: ['Sí, si le precede una \"y\"','Sí, si le precede una consonante','No, en pinyin solo existe \"ye\"'], correct:2 }
@@ -182,6 +202,47 @@
       const question = questions.find(q=>q.id===record.question_id);
       const rec = Object.assign({}, record, { user_name, user_group, question_title: question ? question.shortTitle : record.question_id });
       storeResultLocal(rec);
+    }
+
+    /* ========== JINGLE via WebAudio (suau, curt) ========= */
+    let audioCtx = null;
+    let jingleEnabled = true;
+    function playJingle(){
+      try {
+        if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = audioCtx;
+        const now = ctx.currentTime;
+        // breve secuencia de notas tipo "tick-tick-tiiiii"
+        const freqs = [880, 880, 880, 1318.5]; // A A A E'
+        const durations = [0.08, 0.08, 0.18, 0.36];
+        let t = now;
+        freqs.forEach((f,i)=>{
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = f;
+          g.gain.value = 0.08; // suau
+          o.connect(g); g.connect(ctx.destination);
+          o.start(t);
+          o.stop(t + durations[i]);
+          t += durations[i] + 0.02;
+        });
+      } catch(e){ console.warn('playJingle error', e); }
+    }
+
+    // Toggle jingle button
+    const jingleToggleBtn = document.getElementById('jingleToggle');
+    function setJingleButtonState(){
+      if(!jingleToggleBtn) return;
+      jingleToggleBtn.textContent = jingleEnabled ? '🔔' : '🔕';
+      jingleToggleBtn.title = jingleEnabled ? 'Jingle activado (suau)' : 'Jingle desactivado';
+    }
+    if (jingleToggleBtn) {
+      jingleToggleBtn.addEventListener('click', ()=> {
+        jingleEnabled = !jingleEnabled;
+        setJingleButtonState();
+      });
+      setJingleButtonState();
     }
 
     /* ========== Render & lógica principal ========= */
@@ -236,6 +297,10 @@
       pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
       container.appendChild(pandaWrap);
       createConfetti();
+      if (jingleEnabled) {
+        // tocar jingle breve
+        playJingle();
+      }
     }
 
     function createConfetti() {
@@ -245,14 +310,10 @@
       for (let i = 0; i < 18; i++) {
         const confetti = document.createElement('div');
         confetti.className = 'confetti';
-        confetti.style.position = 'absolute';
         confetti.style.left = Math.random()*80 + '%';
         confetti.style.top = (Math.random()*20) + 'px';
-        confetti.style.width = '9px';
-        confetti.style.height = '9px';
         confetti.style.background = colors[Math.floor(Math.random()*colors.length)];
-        confetti.style.borderRadius = '2px';
-        confetti.style.animation = 'confettiFall ' + (Math.random()*1.4 + 1.6) + 's linear forwards';
+        confetti.style.animationDuration = (Math.random()*1.4 + 1.6) + 's';
         container.appendChild(confetti);
         setTimeout(()=> { if(confetti.parentNode) confetti.parentNode.removeChild(confetti); }, 3200);
       }
@@ -357,14 +418,10 @@
           </div>
 
           <div style="margin-top:18px;display:flex;gap:10px;justify-content:center">
-            <button id="playAgainBtn" class="next-button">Jugar de nuevo</button>
-            <button id="downloadCsvBtnResults" class="small-btn" style="padding:10px 12px;border-radius:10px">Exportar CSV</button>
+            <button id="playAgainBtn" class="next-button" onclick="restartGame()">Jugar de nuevo</button>
           </div>
         </div>
       `;
-
-      document.getElementById('playAgainBtn').addEventListener('click', restartGame);
-      document.getElementById('downloadCsvBtnResults').addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz.csv'));
 
       // Guardar resumen de sessió
       const sessionSummary = {
@@ -468,7 +525,6 @@
       const explicitSessions = rows.filter(r=>r && r.session).map(r=>r.session).slice().reverse();
       const responseRecords = rows.filter(r=>r && !r.session);
 
-      // synthesize sessions from responses
       const sessionsById = {};
       responseRecords.forEach(r => {
         const sid = r.game_session || ('gen-' + (r.user_name || 'u') + '-' + (r.timestamp||''));
@@ -483,7 +539,7 @@
       const combined = explicitSessions.slice();
       Object.values(sessionsById).forEach(s => { if(!explicitIds.has(s.game_session)) combined.unshift(s); });
 
-      let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="small-btn" id="exportAllCsv">Exportar CSV</button><button class="small-btn" id="clearResultsBtn">Borrar resultados locales</button></div>`;
+      let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="small-btn" id="clearResultsBtn">Borrar resultados locales</button></div>`;
       html += `<div id="adminStats"></div><div style="margin-top:10px">`;
       combined.forEach(sess => {
         const dateStr = formatDateNice(sess.date);
@@ -505,7 +561,6 @@
       html += `</div>`;
       panel.innerHTML = html;
 
-      document.getElementById('exportAllCsv').addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz_all.csv'));
       document.getElementById('clearResultsBtn').addEventListener('click', ()=>{
         if(confirm('¿Borrar todos los resultados guardados localmente? Esta acción no se puede deshacer.')){
           localStorage.removeItem(RESULTS_KEY);
@@ -522,7 +577,6 @@
       const responseRecords = allRows.filter(r => r && !r.session);
       const explicitSessions = allRows.filter(r => r && r.session).map(r => r.session);
 
-      // total attempts per question
       const totalAttemptsPerQuestion = {};
       responseRecords.forEach(r => {
         if(!r.question_id) return;
