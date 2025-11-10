@@ -70,7 +70,7 @@
 
     #adminPanel { margin-top:14px; padding:12px; border-radius:12px; background:#f8fafc; display:none; max-height:52vh; overflow:auto; border:1px solid #e6edf8; }
 
-    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:200; }
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display:flex;align-items:center;justify-content:center;z-index:200; }
     .password-card { background: white; padding: 18px; border-radius: 12px; width: 92%; max-width: 480px; text-align: left; box-shadow: 0 12px 40px rgba(0,0,0,0.4); position:relative; }
 
     .confetti { position: absolute; width: 9px; height: 9px; border-radius:2px; z-index:99; animation:confettiFall linear forwards; pointer-events:none; }
@@ -101,7 +101,7 @@
         <button class="small-btn" id="openGameBtn">Abrir juego</button>
       </div>
 
-      <!-- lock icon at top-right like original -->
+      <!-- lock icon at top-right (only this, no admin button in modal) -->
       <div class="admin-icon" id="adminIcon" title="Acceso administrador">🔒</div>
     </div>
 
@@ -114,7 +114,7 @@
     <div id="adminPanel" aria-live="polite"></div>
   </div>
 
-  <!-- Modal contraseña + formulario de usuario -->
+  <!-- Modal contraseña + formulario de usuario (sin botón 'Acceso admin') -->
   <div id="passwordOverlay" class="overlay" style="display:none;">
     <div class="password-card" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
       <h2 id="pwTitle" style="text-align:center;margin:6px 0 12px">Introduce la contraseña</h2>
@@ -141,7 +141,6 @@
 
       <div style="display:flex;gap:8px">
         <button id="passwordBtn" class="next-button" style="flex:1">Empezar</button>
-        <button id="adminQuickBtn" class="small-btn" style="flex:1">Acceso admin</button>
       </div>
 
       <div id="passwordError" style="color:#f56565;margin-top:10px;display:none;text-align:center">Contraseña incorrecta o campos incompletos</div>
@@ -151,12 +150,12 @@
   <script>
   (function(){
     'use strict';
-    console.log('Quiz script iniciado (fixes)');
+    console.log('Quiz script iniciado (sin sonidos)');
 
     /* ========== CONFIG ======== */
     const STUDENT_PASSWORD = "PANDARIN25".normalize('NFC');
     const ADMIN_PASSWORD   = "XUXITO25".normalize('NFC');
-    const RESULTS_KEY = 'quiz_results_final';
+    const RESULTS_KEY = 'quiz_results_final_nosound';
 
     /* ========== PREGUNTAS ========= */
     const questions = [
@@ -201,64 +200,6 @@
       const question = questions.find(q=>q.id===record.question_id);
       const rec = Object.assign({}, record, { user_name, user_group, question_title: question ? question.shortTitle : record.question_id });
       storeResultLocal(rec);
-    }
-
-    /* ========== WebAudio: música de fondo (sin aplausos) ========= */
-    let audioCtx = null;
-    let bgOscs = [];
-    let bgGain = null;
-    let bgPlaying = false;
-    let musicEnabled = true;
-
-    function ensureAudioCtx(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-
-    function startBackgroundMusic(){
-      if (!musicEnabled) return;
-      if (bgPlaying) return;
-      const ctx = ensureAudioCtx();
-      bgGain = ctx.createGain(); bgGain.gain.value = 0.06; // suau
-      bgGain.connect(ctx.destination);
-
-      const freqs = [220, 277.18, 329.63];
-      bgOscs = freqs.map((f, i) => {
-        const o = ctx.createOscillator();
-        o.type = i===1 ? 'triangle' : 'sine';
-        o.frequency.value = f;
-        const g = ctx.createGain(); g.gain.value = 0.0;
-        o.connect(g); g.connect(bgGain);
-        o.start();
-        const schedule = (start) => {
-          const beat = 0.8;
-          for(let k=0;k<8;k++){
-            const st = start + k*beat + i*0.08;
-            g.gain.setValueAtTime(0.0, st);
-            g.gain.linearRampToValueAtTime(0.06, st+0.02);
-            g.gain.linearRampToValueAtTime(0.0, st+0.26);
-          }
-        };
-        schedule(ctx.currentTime);
-        const interval = setInterval(()=> schedule(ctx.currentTime), 2000);
-        o._schedInterval = interval;
-        return o;
-      });
-      bgPlaying = true;
-    }
-
-    function stopBackgroundMusic(){
-      if (!bgPlaying) return;
-      try {
-        bgOscs.forEach(o => { clearInterval(o._schedInterval); o.stop(); });
-      } catch(e){}
-      bgOscs = [];
-      if (bgGain) { try{ bgGain.disconnect(); }catch(e){} bgGain = null; }
-      bgPlaying = false;
-    }
-
-    function toggleMusic(){
-      musicEnabled = !musicEnabled;
-      const btn = document.getElementById('musicToggle');
-      if (btn) btn.textContent = musicEnabled ? '🔊' : '🔈';
-      if (musicEnabled) startBackgroundMusic(); else stopBackgroundMusic();
     }
 
     /* ========== Render & lógica principal ========= */
@@ -314,7 +255,7 @@
       pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
       container.appendChild(pandaWrap);
       createConfetti();
-      // no applause (removed)
+      // NO sound
     }
 
     function createConfetti() {
@@ -333,7 +274,7 @@
       }
     }
 
-    /* ========== Seleccionar respuesta ========= */
+    /* ========== Seleccionar resposta ========= */
     async function selectAnswer(index) {
       if (answered && selectedAnswer === index) return;
       const question = questions[currentQuestionIndex];
@@ -400,7 +341,6 @@
       answered = false;
       selectedAnswer = null;
       shuffledOptions = [];
-      if (musicEnabled) { stopBackgroundMusic(); startBackgroundMusic(); }
       renderQuestion();
     }
     window.restartGame = restartGame;
@@ -455,9 +395,6 @@
         user_group: localStorage.getItem('quiz_user_group')||''
       };
       storeResultLocal({ session: sessionSummary });
-
-      // stop background music at the end
-      stopBackgroundMusic();
     }
 
     /* ========== Admin & Password UI ========= */
@@ -470,7 +407,6 @@
     const userGroupInput = document.getElementById('userGroup');
     const adminPanel = document.getElementById('adminPanel');
     const adminIcon = document.getElementById('adminIcon');
-    const adminQuickBtn = document.getElementById('adminQuickBtn');
     const exportAudiosBtn = document.getElementById('exportAudiosBtn');
     const downloadResultsBtn = document.getElementById('downloadResultsBtn');
     const downloadCsvBtn = document.getElementById('downloadCsvBtn');
@@ -503,7 +439,6 @@
         adminControls.setAttribute('aria-hidden','true');
         adminPanel.style.display = 'none';
         renderQuestion();
-        if (musicEnabled) startBackgroundMusic();
       }
       const name = normalizeInput(userNameInput.value || '');
       const group = normalizeInput(userGroupInput.value || '');
@@ -526,11 +461,6 @@
       if(val === ADMIN_PASSWORD){ startGame(true); }
       else if(val === STUDENT_PASSWORD){ startGame(false); }
       else { pwError.textContent = 'Contraseña incorrecta o campos incompletos'; pwError.style.display = 'block'; setTimeout(()=> pwError.style.display = 'none', 2500); }
-    });
-
-    if(adminQuickBtn) adminQuickBtn.addEventListener('click', ()=> {
-      const v = prompt('Contraseña admin:') || '';
-      if(normalizeInput(v) === ADMIN_PASSWORD){ startGame(true); } else { alert('Contraseña admin incorrecta'); }
     });
 
     adminIcon.addEventListener('click', ()=> {
