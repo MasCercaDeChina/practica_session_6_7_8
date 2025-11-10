@@ -66,7 +66,7 @@
     .next-button{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,var(--bg-a),var(--bg-b));color:#fff;border:none;font-weight:700;cursor:pointer;display:inline-block}
     .small-muted{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
 
-    .admin-icon { position:absolute; right:14px; top:14px; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f1f5f9; border:1px solid #e2e8f0; font-size:18px; color:#475569; }
+    .admin-icon { position:absolute; right:12px; top:12px; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f1f5f9; border:1px solid #e2e8f0; font-size:18px; color:#475569; }
 
     #adminPanel { margin-top:14px; padding:12px; border-radius:12px; background:#f8fafc; display:none; max-height:52vh; overflow:auto; border:1px solid #e6edf8; }
 
@@ -88,12 +88,11 @@
       <div>
         <div style="display:flex;align-items:center;gap:12px">
           <div class="title" id="gameTitle">Quiz: Pinyin & tonos</div>
-          <button id="musicToggle" title="Silenciar música" style="background:transparent;border:none;color:#475569;cursor:pointer;font-size:16px;padding:6px;border-radius:8px">🔊</button>
         </div>
         <div class="subtitle" id="instructionsText">Responde las preguntas. La profesora recibirá los resultados.</div>
       </div>
 
-      <!-- admin controls restored to original set -->
+      <!-- admin controls (hidden) -->
       <div id="adminControls" style="visibility:hidden; display:flex; gap:8px; align-items:center;">
         <button class="small-btn" id="exportAudiosBtn">Estado audios</button>
         <button class="small-btn" id="downloadResultsBtn">Info resultados</button>
@@ -102,14 +101,13 @@
         <button class="small-btn" id="openGameBtn">Abrir juego</button>
       </div>
 
+      <!-- lock icon at top-right like original -->
       <div class="admin-icon" id="adminIcon" title="Acceso administrador">🔒</div>
     </div>
 
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
 
-    <div id="gameContent">
-      <!-- Aquí se renderiza la pregunta -->
-    </div>
+    <div id="gameContent"></div>
 
     <div class="small-muted" style="margin-top:12px">Tus resultados se mandarán automáticamente a la profesora para su evaluación</div>
 
@@ -153,16 +151,15 @@
   <script>
   (function(){
     'use strict';
-    console.log('Quiz script iniciado');
+    console.log('Quiz script iniciado (fixes)');
 
     /* ========== CONFIG ======== */
     const STUDENT_PASSWORD = "PANDARIN25".normalize('NFC');
     const ADMIN_PASSWORD   = "XUXITO25".normalize('NFC');
-    const RESULTS_KEY = 'quiz_results_v2';
+    const RESULTS_KEY = 'quiz_results_v3';
 
-    /* ========== PREGUNTAS (sense àudio) ========= */
+    /* ========== PREGUNTAS ========= */
     const questions = [
-      // first question correct changed to index 2 ("Al menos una vocal")
       { id: 'q1', shortTitle: 'Sílaba', text: '¿Qué debe tener una sílaba en mandarín?', options: ['Al menos una vocal y una consonante','Al menos una vocal compuesta','Al menos una vocal'], correct:2 },
       { id: 'q2', shortTitle: 'Marcas tonales', text: '¿Dónde se colocan las marcas tonales?', options: ['En la vocal más fuerte','En la primera vocal','En la primera consonante'], correct:0 },
       { id: 'q3', shortTitle: '一', text: '¿Qué pasa con 一 si está antes de una sílaba de 1º, 2º y 3º tono?', options: ['Cambia a 1º tono','Cambia a 2º tono','Cambia a 4º tono'], correct:2 },
@@ -206,17 +203,14 @@
       storeResultLocal(rec);
     }
 
-    /* ========== WebAudio: música de fondo + aplausos sintetitzat ========= */
+    /* ========== WebAudio: música de fondo (sin aplausos) ========= */
     let audioCtx = null;
     let bgOscs = [];
     let bgGain = null;
     let bgPlaying = false;
     let musicEnabled = true;
 
-    function ensureAudioCtx(){
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      return audioCtx;
-    }
+    function ensureAudioCtx(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
 
     function startBackgroundMusic(){
       if (!musicEnabled) return;
@@ -225,8 +219,7 @@
       bgGain = ctx.createGain(); bgGain.gain.value = 0.06; // suau
       bgGain.connect(ctx.destination);
 
-      // crear 2 oscil·ladors amb arpegio lent
-      const freqs = [220, 277.18, 329.63]; // A3, C#4, E4
+      const freqs = [220, 277.18, 329.63];
       bgOscs = freqs.map((f, i) => {
         const o = ctx.createOscillator();
         o.type = i===1 ? 'triangle' : 'sine';
@@ -234,9 +227,6 @@
         const g = ctx.createGain(); g.gain.value = 0.0;
         o.connect(g); g.connect(bgGain);
         o.start();
-        // ramp per fer arpegio: modulació de ganes
-        const t0 = ctx.currentTime;
-        // setInterval-style arpeggio via scheduled gain changes
         const schedule = (start) => {
           const beat = 0.8;
           for(let k=0;k<8;k++){
@@ -246,8 +236,7 @@
             g.gain.linearRampToValueAtTime(0.0, st+0.26);
           }
         };
-        schedule(t0);
-        // re-schedule periodically
+        schedule(ctx.currentTime);
         const interval = setInterval(()=> schedule(ctx.currentTime), 2000);
         o._schedInterval = interval;
         return o;
@@ -258,12 +247,7 @@
     function stopBackgroundMusic(){
       if (!bgPlaying) return;
       const ctx = ensureAudioCtx();
-      bgOscs.forEach(o => {
-        try {
-          clearInterval(o._schedInterval);
-          o.stop();
-        } catch(e){}
-      });
+      bgOscs.forEach(o => { try { clearInterval(o._schedInterval); o.stop(); } catch(e){} });
       bgOscs = [];
       if (bgGain) { try{ bgGain.disconnect(); }catch(e){} bgGain = null; }
       bgPlaying = false;
@@ -274,27 +258,6 @@
       const btn = document.getElementById('musicToggle');
       if (btn) btn.textContent = musicEnabled ? '🔊' : '🔈';
       if (musicEnabled) startBackgroundMusic(); else stopBackgroundMusic();
-    }
-
-    // Aplausos sintetitzat: soroll + filtre + envelop
-    function playApplause(){
-      try {
-        const ctx = ensureAudioCtx();
-        const now = ctx.currentTime;
-        const noiseBufferSize = 2 * ctx.sampleRate;
-        const buffer = ctx.createBuffer(1, noiseBufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < noiseBufferSize; i++) data[i] = (Math.random()*2-1) * (1 - i/noiseBufferSize);
-        const src = ctx.createBufferSource();
-        src.buffer = buffer;
-        const band = ctx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 1000; band.Q.value = 0.6;
-        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
-        g.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
-        src.connect(band); band.connect(g); g.connect(ctx.destination);
-        src.start();
-        src.stop(now + 1.3);
-      } catch(e){ console.warn('playApplause error', e); }
     }
 
     /* ========== Render & lógica principal ========= */
@@ -349,8 +312,7 @@
       pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
       container.appendChild(pandaWrap);
       createConfetti();
-      // applause instead of pipi
-      playApplause();
+      // no applause here (user requested removal)
     }
 
     function createConfetti() {
@@ -369,7 +331,7 @@
       }
     }
 
-    /* ========== Seleccionar respuesta ========= */
+    /* ========== Seleccionar resposta ========= */
     async function selectAnswer(index) {
       if (answered && selectedAnswer === index) return;
       const question = questions[currentQuestionIndex];
@@ -426,7 +388,7 @@
       else showResults();
     }
 
-    // expose restartGame globally and ensure inline onclick works
+    // restartGame exposed globally (ensures button always finds it)
     function restartGame() {
       currentQuestionIndex = 0;
       gameSession = Date.now().toString();
@@ -436,7 +398,7 @@
       answered = false;
       selectedAnswer = null;
       shuffledOptions = [];
-      // stop & restart background music scheduling
+      // restart background music if enabled
       if (musicEnabled) { stopBackgroundMusic(); startBackgroundMusic(); }
       renderQuestion();
     }
@@ -472,10 +434,14 @@
           </div>
 
           <div style="margin-top:18px;display:flex;gap:10px;justify-content:center">
-            <button id="playAgainBtn" class="next-button" onclick="window.restartGame()">Jugar de nuevo</button>
+            <button id="playAgainBtn" class="next-button">Jugar de nuevo</button>
           </div>
         </div>
       `;
+
+      // bind restart explicitly (in case of scope issues with inline handlers)
+      const btn = document.getElementById('playAgainBtn');
+      if (btn) btn.addEventListener('click', ()=> { window.restartGame(); });
 
       // Guardar resumen de sessió
       const sessionSummary = {
@@ -488,6 +454,7 @@
         user_group: localStorage.getItem('quiz_user_group')||''
       };
       storeResultLocal({ session: sessionSummary });
+
       // stop background music at the end
       stopBackgroundMusic();
     }
@@ -535,7 +502,6 @@
         adminControls.setAttribute('aria-hidden','true');
         adminPanel.style.display = 'none';
         renderQuestion();
-        // start background music (user interaction has already occurred by clicking Empezar)
         if (musicEnabled) startBackgroundMusic();
       }
       const name = normalizeInput(userNameInput.value || '');
@@ -570,35 +536,15 @@
       if(adminPanel.style.display === 'block'){ adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; }
     });
 
-    // admin buttons behavior (same names as original)
-    if (exportAudiosBtn) exportAudiosBtn.addEventListener('click', ()=> {
-      const items = [];
-      for(let i=0;i<questions.length;i++){
-        // in this quiz there are no audios; just show placeholder
-        items.push({ index:i, name:`Q${i+1}`, hasData:false });
-      }
-      alert('Estado audios: ' + items.map(it=>`Q${it.index+1}: ${it.name}${it.hasData ? ' (guardado)': ''}`).join(' | '));
-    });
-    if (downloadResultsBtn) downloadResultsBtn.addEventListener('click', ()=> {
-      const data = getStoredResults();
-      alert(`Registros locales: ${data.length}. Puedes exportarlos desde Ver resultados.`);
-    });
+    // admin buttons behaviour (placeholders)
+    if (exportAudiosBtn) exportAudiosBtn.addEventListener('click', ()=> { alert('Estado audios (no aplicable)'); });
+    if (downloadResultsBtn) downloadResultsBtn.addEventListener('click', ()=> { const data = getStoredResults(); alert(`Registros locales: ${data.length}`); });
     if (downloadCsvBtn) downloadCsvBtn.addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz.csv'));
-    if (showAdminResultsBtn) showAdminResultsBtn.addEventListener('click', ()=> {
-      if (adminPanel.style.display === 'block') { adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; }
-    });
+    if (showAdminResultsBtn) showAdminResultsBtn.addEventListener('click', ()=> { if (adminPanel.style.display === 'block') { adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; } });
     if (openGameBtn) openGameBtn.addEventListener('click', ()=> { startGame(false); });
 
-    // music toggle
-    const musicToggleBtn = document.getElementById('musicToggle');
-    if (musicToggleBtn) musicToggleBtn.addEventListener('click', ()=> toggleMusic());
-
     window.addEventListener('DOMContentLoaded', ()=> {
-      try{
-        console.log('DOM cargado — mostrando overlay de password...');
-        showPasswordOverlay();
-        window.__quiz = { getStoredResults, questions };
-      } catch(e){ console.error(e); }
+      try{ console.log('DOM cargado — mostrando overlay de password...'); showPasswordOverlay(); window.__quiz = { getStoredResults, questions }; } catch(e){ console.error(e); }
     });
 
     /* ========== Admin aggregated view & stats ========= */
