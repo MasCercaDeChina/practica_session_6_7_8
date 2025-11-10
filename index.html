@@ -29,12 +29,12 @@
     .progress-fill{height:100%;background:linear-gradient(90deg,var(--bg-a),var(--bg-b));width:0%;transition:width .35s ease;border-radius:999px}
 
     .card{background:#fbfdff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(11,22,48,0.03)}
-    .question-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:18px}
-    .options-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .question-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:22px} /* más espacio bajo el título */
+    .options-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px} /* más espacio entre opciones */
 
     .option-button{
-      padding:12px 18px;
-      border-radius:18px;
+      padding:14px 18px;
+      border-radius:20px; /* más redondeado */
       border:1px solid #e6eefc;
       background:#fff;
       font-weight:700;
@@ -43,7 +43,7 @@
       text-align:center;
       transition:transform .12s, box-shadow .12s;
       box-shadow:0 8px 20px rgba(11,22,48,0.04);
-      min-height:54px;
+      min-height:56px; /* más alto */
       display:flex;
       align-items:center;
       justify-content:center;
@@ -66,7 +66,8 @@
     .next-button{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,var(--bg-a),var(--bg-b));color:#fff;border:none;font-weight:700;cursor:pointer;display:inline-block}
     .small-muted{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
 
-    .admin-icon { position:absolute; right:12px; top:12px; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f1f5f9; border:1px solid #e2e8f0; font-size:18px; color:#475569; }
+    /* candau - hidden by default; JS will show it on initial screen */
+    .admin-icon { position:absolute; right:12px; top:12px; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f1f5f9; border:1px solid #e2e8f0; font-size:18px; color:#475569; display:none; }
 
     #adminPanel { margin-top:14px; padding:12px; border-radius:12px; background:#f8fafc; display:none; max-height:52vh; overflow:auto; border:1px solid #e6edf8; }
 
@@ -101,7 +102,7 @@
         <button class="small-btn" id="openGameBtn">Abrir juego</button>
       </div>
 
-      <!-- lock icon at top-right (only this, no admin button in modal) -->
+      <!-- lock icon at top-right: hidden by default, shown only on initial screen -->
       <div class="admin-icon" id="adminIcon" title="Acceso administrador">🔒</div>
     </div>
 
@@ -150,12 +151,12 @@
   <script>
   (function(){
     'use strict';
-    console.log('Quiz script iniciado (sin sonidos)');
+    console.log('Quiz script iniciado (sin sonidos, candau en pantalla inicial)');
 
     /* ========== CONFIG ======== */
     const STUDENT_PASSWORD = "PANDARIN25".normalize('NFC');
     const ADMIN_PASSWORD   = "XUXITO25".normalize('NFC');
-    const RESULTS_KEY = 'quiz_results_final_nosound';
+    const RESULTS_KEY = 'quiz_results_final_nosound_v2';
 
     /* ========== PREGUNTAS ========= */
     const questions = [
@@ -255,7 +256,6 @@
       pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
       container.appendChild(pandaWrap);
       createConfetti();
-      // NO sound
     }
 
     function createConfetti() {
@@ -397,7 +397,7 @@
       storeResultLocal({ session: sessionSummary });
     }
 
-    /* ========== Admin & Password UI ========= */
+    /* ========== Admin & Password UI (candau visible solo en inicio) ========= */
     const pwOverlay = document.getElementById('passwordOverlay');
     const pwInput = document.getElementById('passwordInput');
     const pwBtn = document.getElementById('passwordBtn');
@@ -424,11 +424,16 @@
       prefillUserInfo();
       pwOverlay.style.display = 'flex';
       if(pwError) pwError.style.display = 'none';
+      // mostrar candau solo en la pantalla inicial
+      if (adminIcon) adminIcon.style.display = 'flex';
       setTimeout(()=> { if(userNameInput) userNameInput.focus(); }, 120);
     }
 
     function startGame(admin=false){
       isAdminMode = admin;
+      // hide the lock icon as soon as the game starts (admin or student)
+      if (adminIcon) adminIcon.style.display = 'none';
+
       if (isAdminMode) {
         adminControls.style.visibility = 'visible';
         adminControls.setAttribute('aria-hidden','false');
@@ -463,9 +468,23 @@
       else { pwError.textContent = 'Contraseña incorrecta o campos incompletos'; pwError.style.display = 'block'; setTimeout(()=> pwError.style.display = 'none', 2500); }
     });
 
-    adminIcon.addEventListener('click', ()=> {
-      if(adminPanel.style.display === 'block'){ adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; }
-    });
+    // candau behaviour: solo responde si la pantalla d'inici/modal està visible
+    if (adminIcon) {
+      adminIcon.addEventListener('click', ()=> {
+        if (pwOverlay && pwOverlay.style.display === 'flex') {
+          const v = prompt('Contraseña admin:') || '';
+          if (normalizeInput(v) === ADMIN_PASSWORD) {
+            // tancar overlay i iniciar admin
+            pwOverlay.style.display = 'none';
+            startGame(true);
+          } else {
+            alert('Contraseña admin incorrecta');
+          }
+        }
+      });
+    }
+
+    adminIcon.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') adminIcon.click(); });
 
     // admin buttons behaviour (placeholders)
     if (exportAudiosBtn) exportAudiosBtn.addEventListener('click', ()=> { alert('Estado audios (no aplicable)'); });
@@ -529,7 +548,8 @@
       html += `</div>`;
       panel.innerHTML = html;
 
-      document.getElementById('clearResultsBtn').addEventListener('click', ()=>{
+      const clearBtn = document.getElementById('clearResultsBtn');
+      if (clearBtn) clearBtn.addEventListener('click', ()=>{
         if(confirm('¿Borrar todos los resultados guardados localmente? Esta acción no se puede deshacer.')){
           localStorage.removeItem(RESULTS_KEY);
           buildAdminAggregatedView();
