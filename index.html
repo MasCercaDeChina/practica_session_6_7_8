@@ -92,7 +92,7 @@
         <div class="subtitle" id="instructionsText">Responde las preguntas. La profesora recibirá los resultados.</div>
       </div>
 
-      <!-- admin controls (hidden) -->
+      <!-- admin controls (hidden by default) -->
       <div id="adminControls" style="visibility:hidden; display:flex; gap:8px; align-items:center;">
         <button class="small-btn" id="exportAudiosBtn">Estado audios</button>
         <button class="small-btn" id="downloadResultsBtn">Info resultados</button>
@@ -156,7 +156,7 @@
     /* ========== CONFIG ======== */
     const STUDENT_PASSWORD = "PANDARIN25".normalize('NFC');
     const ADMIN_PASSWORD   = "XUXITO25".normalize('NFC');
-    const RESULTS_KEY = 'quiz_results_v3';
+    const RESULTS_KEY = 'quiz_results_final';
 
     /* ========== PREGUNTAS ========= */
     const questions = [
@@ -246,8 +246,9 @@
 
     function stopBackgroundMusic(){
       if (!bgPlaying) return;
-      const ctx = ensureAudioCtx();
-      bgOscs.forEach(o => { try { clearInterval(o._schedInterval); o.stop(); } catch(e){} });
+      try {
+        bgOscs.forEach(o => { clearInterval(o._schedInterval); o.stop(); });
+      } catch(e){}
       bgOscs = [];
       if (bgGain) { try{ bgGain.disconnect(); }catch(e){} bgGain = null; }
       bgPlaying = false;
@@ -268,7 +269,8 @@
       if (reshuffleOptions || shuffledOptions.length === 0) shuffleOptions(question);
 
       const progress = ((currentQuestionIndex) / questions.length) * 100;
-      document.getElementById('progressFill').style.width = progress + '%';
+      const pf = document.getElementById('progressFill');
+      if (pf) pf.style.width = progress + '%';
 
       content.innerHTML = `
         <div class="card" role="region" aria-label="Pregunta ${currentQuestionIndex + 1}">
@@ -312,7 +314,7 @@
       pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
       container.appendChild(pandaWrap);
       createConfetti();
-      // no applause here (user requested removal)
+      // no applause (removed)
     }
 
     function createConfetti() {
@@ -327,11 +329,11 @@
         confetti.style.background = colors[Math.floor(Math.random()*colors.length)];
         confetti.style.animationDuration = (Math.random()*1.4 + 1.6) + 's';
         container.appendChild(confetti);
-        setTimeout(()=> { if(confetti.parentNode) confetti.parentNode.removeChild(confetti); }, 3200);
+        setTimeout(() => { if (confetti.parentNode) confetti.parentNode.removeChild(confetti); }, 3200);
       }
     }
 
-    /* ========== Seleccionar resposta ========= */
+    /* ========== Seleccionar respuesta ========= */
     async function selectAnswer(index) {
       if (answered && selectedAnswer === index) return;
       const question = questions[currentQuestionIndex];
@@ -388,7 +390,7 @@
       else showResults();
     }
 
-    // restartGame exposed globally (ensures button always finds it)
+    // restartGame exposed globally and reliable
     function restartGame() {
       currentQuestionIndex = 0;
       gameSession = Date.now().toString();
@@ -398,15 +400,14 @@
       answered = false;
       selectedAnswer = null;
       shuffledOptions = [];
-      // restart background music if enabled
       if (musicEnabled) { stopBackgroundMusic(); startBackgroundMusic(); }
       renderQuestion();
     }
     window.restartGame = restartGame;
 
-    /* ========== Pantalla final de resultados ========= */
+    /* ========== showResults corregida (NO sobreescriu mainContainer) ========= */
     function showResults() {
-      const content = document.getElementById('mainContainer');
+      const content = document.getElementById('gameContent'); // <-- SOLO gameContent
       const totalAttempts = Object.values(questionAttempts).reduce((a,b)=>a+b,0);
       const perQuestionLines = questions.map((q, idx) => {
         const attempts = questionAttempts[q.id] || 0;
@@ -417,6 +418,7 @@
         <div style="padding:26px;text-align:center">
           <div style="font-size:64px">🐼🎉</div>
           <h2 style="margin:8px 0 6px">¡Quiz completado!</h2>
+
           <div style="margin-top:18px;text-align:left;max-width:720px;margin-left:auto;margin-right:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:12px;background:linear-gradient(90deg,#f8fafc,#ffffff);box-shadow:0 10px 30px rgba(11,22,48,0.04);margin-bottom:12px">
               <div>
@@ -438,10 +440,9 @@
           </div>
         </div>
       `;
-
-      // bind restart explicitly (in case of scope issues with inline handlers)
+      // bind restart explicitly
       const btn = document.getElementById('playAgainBtn');
-      if (btn) btn.addEventListener('click', ()=> { window.restartGame(); });
+      if (btn) btn.addEventListener('click', () => { try { window.restartGame(); } catch(e){ console.error('restartGame no disponible', e); } });
 
       // Guardar resumen de sessió
       const sessionSummary = {
@@ -540,11 +541,17 @@
     if (exportAudiosBtn) exportAudiosBtn.addEventListener('click', ()=> { alert('Estado audios (no aplicable)'); });
     if (downloadResultsBtn) downloadResultsBtn.addEventListener('click', ()=> { const data = getStoredResults(); alert(`Registros locales: ${data.length}`); });
     if (downloadCsvBtn) downloadCsvBtn.addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz.csv'));
-    if (showAdminResultsBtn) showAdminResultsBtn.addEventListener('click', ()=> { if (adminPanel.style.display === 'block') { adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; } });
+    if (showAdminResultsBtn) showAdminResultsBtn.addEventListener('click', ()=> {
+      if (adminPanel.style.display === 'block') { adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; }
+    });
     if (openGameBtn) openGameBtn.addEventListener('click', ()=> { startGame(false); });
 
     window.addEventListener('DOMContentLoaded', ()=> {
-      try{ console.log('DOM cargado — mostrando overlay de password...'); showPasswordOverlay(); window.__quiz = { getStoredResults, questions }; } catch(e){ console.error(e); }
+      try{
+        console.log('DOM cargado — mostrando overlay de password...');
+        showPasswordOverlay();
+        window.__quiz = { getStoredResults, questions };
+      } catch(e){ console.error(e); }
     });
 
     /* ========== Admin aggregated view & stats ========= */
