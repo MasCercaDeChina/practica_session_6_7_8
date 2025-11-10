@@ -1,201 +1,629 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juego de pronunciación mandarín</title>
-<style>
-  body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f5f5f5; color:#111; }
-  h1 { text-align:center; }
-  #gameContent { max-width:700px; margin:20px auto; background:#fff; padding:20px; border-radius:10px; box-shadow:0 6px 18px rgba(12,20,40,0.04);}
-  .option-button { display:block; width:100%; margin:8px 0; padding:10px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-size:16px; }
-  .option-button.correct { background:#15803d; color:#fff; }
-  .option-button.incorrect { background:#b91c1c; color:#fff; }
-  #feedback { text-align:center; margin-top:10px; font-weight:bold; }
-  #nextButton { margin-top:15px; padding:10px 15px; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; border:none; border-radius:8px; cursor:pointer; }
-  .panda-center { display:flex; flex-direction:column; align-items:center; font-size:48px; margin-top:20px; }
-  .panda-text { font-size:24px; margin-top:5px; }
-  #progressFill { height:10px; background:#667eea; width:0%; border-radius:5px; margin-top:10px; }
-</style>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Language" content="es">
+  <meta name="language" content="es">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Juego: preguntas rápidas (pinyin)</title>
+
+  <style>
+    /* ===== Estilos modernos, inspirats en el primer joc ===== */
+    *, *:before, *:after { box-sizing: border-box; }
+    :root{
+      --bg-a:#667eea;
+      --bg-b:#764ba2;
+      --card:#ffffff;
+      --muted:#94a3b8;
+      --ok:#48bb78;
+      --err:#f56565;
+      --text:#2d3748;
+    }
+    body{margin:0;padding:28px;font-family:Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;background:linear-gradient(135deg,var(--bg-a) 0%,var(--bg-b) 100%);min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .container{width:92%;max-width:980px;background:var(--card);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:26px;margin:12px;position:relative;overflow:hidden}
+
+    .header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    .title{font-size:22px;font-weight:800;color:var(--text)}
+    .subtitle{font-size:13px;color:var(--muted)}
+    .progress-bar{width:100%;height:8px;background:#eef2ff;border-radius:999px;overflow:hidden;margin:14px 0}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--bg-a),var(--bg-b));width:0%;transition:width .35s ease;border-radius:999px}
+
+    .card{background:#fbfdff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(11,22,48,0.03)}
+    .question-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px}
+    .options-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .option-button{padding:12px 14px;border-radius:12px;border:1px solid #e6eefc;background:#fff;font-weight:600;color:var(--text);cursor:pointer;text-align:left;transition:transform .12s, box-shadow .12s;box-shadow:0 6px 18px rgba(11,22,48,0.03)}
+    .option-button:hover:not(:disabled){transform:translateY(-3px)}
+    .option-button[disabled]{opacity:.52;cursor:not-allowed}
+    .option-button.correct{background:var(--ok);border-color:var(--ok);color:#fff}
+    .option-button.incorrect{background:var(--err);border-color:var(--err);color:#fff}
+
+    .feedback{margin-top:12px;text-align:center;padding:12px;border-radius:10px;font-weight:700}
+    .feedback.success{background:#dcfce7;color:#14532d}
+    .feedback.error{background:#fff1f2;color:#7f1d1d}
+
+    .panda-center { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; width:100%; text-align:center; margin-top:14px; margin-bottom:6px; }
+    .panda-center .panda-emoji { font-size:120px; line-height:1; animation: pandaPop .9s cubic-bezier(.2,.9,.2,1); user-select:none; }
+    .panda-center .panda-text { font-size:20px; font-weight:800; color:var(--text); }
+    @keyframes pandaPop { 0%{ transform: scale(.4) translateY(40px); opacity:0 } 50%{ transform: scale(1.08) translateY(-6px); opacity:1 } 80%{ transform: scale(.96) translateY(2px) } 100%{ transform: scale(1) translateY(0) } }
+
+    .next-button{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,var(--bg-a),var(--bg-b));color:#fff;border:none;font-weight:700;cursor:pointer;display:inline-block}
+    .small-muted{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+
+    .admin-icon { position:absolute; right:14px; top:14px; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#f1f5f9; border:1px solid #e2e8f0; font-size:18px; color:#475569; }
+
+    /* admin panel */
+    #adminPanel { margin-top:14px; padding:12px; border-radius:12px; background:#f8fafc; display:none; max-height:52vh; overflow:auto; border:1px solid #e6edf8; }
+
+    /* modal password */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:200; }
+    .password-card { background: white; padding: 18px; border-radius: 12px; width: 92%; max-width: 480px; text-align: left; box-shadow: 0 12px 40px rgba(0,0,0,0.4); position:relative; }
+
+    /* responsive */
+    @media (max-width:720px){
+      .options-grid{grid-template-columns:1fr}
+      .panda-center .panda-emoji { font-size:96px }
+    }
+  </style>
 </head>
 <body>
-
-<h1>Juego de pronunciación mandarín</h1>
-<div id="gameContent">
-  Escucha el audio y selecciona la respuesta correcta
-  <div id="optionsGrid"></div>
-  <div id="feedback"></div>
-  <div id="pandaCelebration"></div>
-  <button id="nextButton" style="display:none;" onclick="nextQuestion()">Siguiente</button>
-  <div id="progressFill"></div>
-</div>
-
-<script>
-(() => {
-  const questions = [
-    {
-      id: 'q1',
-      shortTitle: 'Sílaba',
-      text: '¿Qué debe tener una sílaba en mandarín?',
-      options: [
-        'Al menos una vocal y una consonante',
-        'Al menos una vocal compuesta',
-        'Al menos una vocal'
-      ],
-      correct: 0
-    },
-    {
-      id: 'q2',
-      shortTitle: 'Marcas tonales',
-      text: '¿Dónde se colocan las marcas tonales?',
-      options: [
-        'En la vocal más fuerte',
-        'En la primera vocal',
-        'En la primera consonante'
-      ],
-      correct: 0
-    },
-    {
-      id: 'q3',
-      shortTitle: '一',
-      text: '¿Qué pasa con 一 si está antes de una sílaba de 1º, 2º y 3º tono?',
-      options: [
-        'Cambia a 1º tono',
-        'Cambia a 2º tono',
-        'Cambia a 4º tono'
-      ],
-      correct: 2
-    },
-    {
-      id: 'q4',
-      shortTitle: 'Vocal ie',
-      text: 'La vocal compuesta "ie" se puede escribir así (ie) en pinyin?',
-      options: [
-        'Sí, si le precede una "y"',
-        'Sí, si le precede una consonante',
-        'No, en pinyin solo existe "ye"'
-      ],
-      correct: 2
-    }
-  ];
-
-  let currentQuestionIndex = 0;
-  let answered = false;
-  let selectedAnswer = null;
-  let questionAttempts = {};
-  let correctAnswers = 0;
-  let firstTryCorrectCount = 0;
-  let firstTryCorrectByQuestion = {};
-
-  function showPandaCelebration() {
-    const container = document.getElementById('pandaCelebration');
-    if (!container) return;
-    container.innerHTML = '';
-    const pandaWrap = document.createElement('div');
-    pandaWrap.className = 'panda-center';
-    pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
-    container.appendChild(pandaWrap);
-  }
-
-  function renderOptionsGrid() {
-    const g = document.getElementById('optionsGrid');
-    if(!g) return;
-    const question = questions[currentQuestionIndex];
-    g.innerHTML = `<h2>${question.text}</h2>` + question.options.map((o,i)=>
-      `<button class="option-button" id="option${i}" onclick="selectAnswer(${i})">${o}</button>`).join('');
-    document.querySelectorAll('.option-button').forEach(b=>b.disabled=false);
-  }
-
-  window.selectAnswer = function(index) {
-    const question = questions[currentQuestionIndex];
-    const correctAnswerIndex = question.correct;
-    questionAttempts[question.id] = (questionAttempts[question.id] || 0) + 1;
-    const isCorrect = index === correctAnswerIndex;
-    selectedAnswer = index;
-    const buttons = document.querySelectorAll('.option-button');
-    buttons.forEach(btn => btn.disabled = true);
-    const selectedButton = document.getElementById(`option${index}`);
-    if (selectedButton) selectedButton.classList.add(isCorrect ? 'correct' : 'incorrect');
-    const feedback = document.getElementById('feedback');
-
-    if (isCorrect) {
-      correctAnswers++;
-      const firstTry = questionAttempts[question.id] === 1;
-      if (firstTry && !firstTryCorrectByQuestion[question.id]) {
-        firstTryCorrectCount++;
-        firstTryCorrectByQuestion[question.id] = true;
-      }
-      answered = true;
-      if (feedback) feedback.textContent = '';
-      showPandaCelebration();
-      document.getElementById('nextButton').style.display = 'inline-block';
-    } else {
-      if (feedback) feedback.textContent = 'Vuelve a intentarlo';
-      setTimeout(() => {
-        if (feedback) feedback.textContent = '';
-        if (selectedButton) selectedButton.classList.remove('incorrect');
-        renderOptionsGrid();
-        selectedAnswer = null;
-      }, 900);
-    }
-  };
-
-  window.nextQuestion = function() {
-    currentQuestionIndex++;
-    document.getElementById('pandaCelebration').innerHTML = '';
-    document.getElementById('nextButton').style.display = 'none';
-    if (currentQuestionIndex < questions.length) renderOptionsGrid();
-    else showResults();
-  };
-
-  function showResults() {
-    const content = document.getElementById('gameContent');
-    const totalAttempts = Object.values(questionAttempts).reduce((a,b)=>a+b,0);
-    const perQuestionLines = questions.map((q, idx) => {
-      const attempts = questionAttempts[q.id] || 0;
-      return `<div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:#fff;margin-bottom:8px;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
-                <div><strong>Pregunta ${idx+1} (${q.shortTitle}):</strong></div>
-                <div style="font-weight:700;color:#334155">${attempts}</div>
-              </div>`;
-    }).join('');
-
-    content.innerHTML = `
-      <div style="text-align:center;padding:26px;">
-        <div style="font-size:64px">🐼🎉</div>
-        <h2 style="margin:8px 0 6px">¡Juego completado!</h2>
-        <div style="margin-top:18px;text-align:left;max-width:720px;margin-left:auto;margin-right:auto">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:12px;background:linear-gradient(90deg,#f8fafc,#ffffff);box-shadow:0 10px 30px rgba(11,22,48,0.04);margin-bottom:12px">
-            <div>
-              <div style="font-size:13px;color:#94a3b8">Respuestas acertadas</div>
-              <div style="font-size:28px;font-weight:800;color:#667eea">${firstTryCorrectCount}/${questions.length}</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;color:#94a3b8">Intentos totales</div>
-              <div style="font-size:22px;font-weight:700;color:#2d3748">${totalAttempts}</div>
-            </div>
-          </div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:8px">Detalle intentos:</div>
-          ${perQuestionLines}
-        </div>
-        <div style="margin-top:18px"><button onclick="restartGame()" style="padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;cursor:pointer">Jugar de nuevo</button></div>
+  <div class="container" id="mainContainer" aria-live="polite">
+    <div class="header">
+      <div>
+        <div class="title" id="gameTitle">Quiz: Pinyin & tonos</div>
+        <div class="subtitle" id="instructionsText">Responde las preguntas. La profesora recibirá los resultados.</div>
       </div>
-    `;
-  }
+      <div id="adminControls" style="visibility:hidden; display:flex; gap:8px; align-items:center;">
+        <button class="small-btn" id="exportAudiosBtn">Estado audios</button>
+        <button class="small-btn" id="downloadResultsBtn">Info resultados</button>
+        <button class="small-btn" id="downloadCsvBtn">Exportar CSV</button>
+        <button class="small-btn" id="showAdminResultsBtn">Ver resultados</button>
+        <button class="small-btn" id="openGameBtn">Abrir juego</button>
+      </div>
+      <div class="admin-icon" id="adminIcon" title="Acceso administrador">🔒</div>
+    </div>
 
-  window.restartGame = function() {
-    currentQuestionIndex = 0;
-    questionAttempts = {};
-    correctAnswers = 0;
-    firstTryCorrectCount = 0;
-    firstTryCorrectByQuestion = {};
-    answered = false;
-    selectedAnswer = null;
-    renderOptionsGrid();
-  };
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
 
-  // Inicialitzar
-  renderOptionsGrid();
-})();
-</script>
+    <div id="gameContent">
+      <!-- Aquí se renderiza la pregunta -->
+    </div>
+
+    <div class="small-muted" style="margin-top:12px">Tus resultados se mandarán automáticamente a la profesora para su evaluación</div>
+
+    <div id="adminPanel" aria-live="polite"></div>
+  </div>
+
+  <!-- Modal contraseña + formulario de usuario -->
+  <div id="passwordOverlay" class="overlay" style="display:none;">
+    <div class="password-card" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+      <h2 id="pwTitle" style="text-align:center;margin:6px 0 12px">Introduce la contraseña</h2>
+
+      <div style="margin-bottom:10px">
+        <label for="userName" style="font-size:13px;color:#475569">Nombre usuario (máx. 30 caracteres)</label>
+        <input id="userName" class="text-input" type="text" placeholder="Ej. María Pérez" aria-label="Nombre usuario" maxlength="30" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6eefc;margin-top:6px">
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label for="userGroup" style="font-size:13px;color:#475569">Grupo</label>
+        <select id="userGroup" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6eefc;margin-top:6px">
+          <option value="">-- Selecciona grupo --</option>
+          <option value="PANDARIN1">PANDARIN1</option>
+          <option value="PANDARIN2">PANDARIN2</option>
+          <option value="PANDARIN3">PANDARIN3</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label for="passwordInput" style="font-size:13px;color:#475569">Contraseña</label>
+        <input id="passwordInput" class="password-input" type="password" placeholder="Introduce la contraseña" aria-label="Contraseña" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6eefc;margin-top:6px">
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button id="passwordBtn" class="next-button" style="flex:1">Empezar</button>
+        <button id="adminQuickBtn" class="small-btn" style="flex:1">Acceso admin</button>
+      </div>
+
+      <div id="passwordError" style="color:#f56565;margin-top:10px;display:none;text-align:center">Contraseña incorrecta o campos incompletos</div>
+    </div>
+  </div>
+
+  <div id="pandaCelebration" style="position:relative"></div>
+
+  <script>
+  (function(){
+    'use strict';
+    console.log('Quiz script iniciado');
+
+    /* ========== CONFIG ======== */
+    const STUDENT_PASSWORD = "PANDARIN25".normalize('NFC');
+    const ADMIN_PASSWORD   = "XUXITO25".normalize('NFC');
+    const RESULTS_KEY = 'quiz_results_v1';
+
+    /* ========== PREGUNTAS (sense àudio) ========= */
+    const questions = [
+      { id: 'q1', shortTitle: 'Sílaba', text: '¿Qué debe tener una sílaba en mandarín?', options: ['Al menos una vocal y una consonante','Al menos una vocal compuesta','Al menos una vocal'], correct:2 },
+      { id: 'q2', shortTitle: 'Marcas tonales', text: '¿Dónde se colocan las marcas tonales?', options: ['En la vocal más fuerte','En la primera vocal','En la primera consonante'], correct:0 },
+      { id: 'q3', shortTitle: '一', text: '¿Qué pasa con 一 si está antes de una sílaba de 1º, 2º y 3º tono?', options: ['Cambia a 1º tono','Cambia a 2º tono','Cambia a 4º tono'], correct:2 },
+      { id: 'q4', shortTitle: 'Vocal ie', text: 'La vocal compuesta \"ie\" se puede escribir así (ie) en pinyin?', options: ['Sí, si le precede una \"y\"','Sí, si le precede una consonante','No, en pinyin solo existe \"ye\"'], correct:2 }
+    ];
+
+    /* ========== STATE ========= */
+    let gameSession = Date.now().toString();
+    let currentQuestionIndex = 0;
+    let questionAttempts = {};
+    let firstTryCorrectCount = 0;
+    let firstTryCorrectByQuestion = {};
+    let answered = false;
+    let selectedAnswer = null;
+    let shuffledOptions = [];
+    let correctAnswerIndex = 0;
+    let isAdminMode = false;
+
+    /* ========== Utilidades ========= */
+    function normalizeInput(s){ if(!s) return ''; return s.replace(/[\u200B-\u200D\uFEFF]/g,'').trim().normalize('NFC'); }
+    function shuffleArray(arr){ for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
+
+    function shuffleOptions(question) {
+      const opts = [...question.options];
+      const correct = opts[question.correct];
+      shuffleArray(opts);
+      correctAnswerIndex = opts.indexOf(correct);
+      shuffledOptions = opts;
+      return { options: shuffledOptions, correctIndex: correctAnswerIndex };
+    }
+
+    /* ========== Result storage (local) ========= */
+    function getStoredResults(){ try { const raw = localStorage.getItem(RESULTS_KEY); return raw ? JSON.parse(raw) : []; } catch(e){ return []; } }
+    function storeResultLocal(record){ try { const arr = getStoredResults(); arr.push(record); localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); } catch(e){ console.warn(e); } }
+
+    async function recordResult(record){
+      const user_name = localStorage.getItem('quiz_user_name') || '';
+      const user_group = localStorage.getItem('quiz_user_group') || '';
+      const question = questions.find(q=>q.id===record.question_id);
+      const rec = Object.assign({}, record, { user_name, user_group, question_title: question ? question.shortTitle : record.question_id });
+      storeResultLocal(rec);
+    }
+
+    /* ========== Render & lógica principal ========= */
+    function renderQuestion(reshuffleOptions = true) {
+      const content = document.getElementById('gameContent');
+      const question = questions[currentQuestionIndex];
+      if (!questionAttempts[question.id]) questionAttempts[question.id] = 0;
+      if (reshuffleOptions || shuffledOptions.length === 0) shuffleOptions(question);
+
+      const progress = ((currentQuestionIndex) / questions.length) * 100;
+      document.getElementById('progressFill').style.width = progress + '%';
+
+      content.innerHTML = `
+        <div class="card" role="region" aria-label="Pregunta ${currentQuestionIndex + 1}">
+          <div class="question-title">${question.text}</div>
+
+          <div class="options-grid" id="optionsGrid">
+            ${shuffledOptions.map((option, index) => `
+              <button class="option-button" id="option${index}" aria-pressed="false">${option}</button>
+            `).join('')}
+          </div>
+
+          <div id="feedback" aria-live="polite"></div>
+
+          <div id="pandaCelebration" style="position:relative; min-height:120px;"></div>
+
+          <div style="display:flex;justify-content:center;margin-top:12px">
+            <button class="next-button" id="nextButton" style="display:none;">${currentQuestionIndex < questions.length - 1 ? 'Siguiente pregunta' : 'Ver resultados'}</button>
+          </div>
+
+          <div style="text-align:center;margin-top:8px;color:var(--muted);font-size:13px">Intentos en esta pregunta: <span id="attemptsIndicator">${questionAttempts[question.id]}</span></div>
+        </div>
+      `;
+      answered = false;
+      selectedAnswer = null;
+
+      // attach handlers
+      document.querySelectorAll('.option-button').forEach((b,i)=> {
+        b.addEventListener('click', (ev)=> { ev.preventDefault(); selectAnswer(i); });
+        b.disabled = false;
+      });
+      const nextBtn = document.getElementById('nextButton');
+      if (nextBtn) nextBtn.addEventListener('click', ()=> nextQuestion());
+    }
+
+    function showPandaCelebration() {
+      const container = document.getElementById('pandaCelebration');
+      if (!container) return;
+      container.innerHTML = '';
+      const pandaWrap = document.createElement('div');
+      pandaWrap.className = 'panda-center';
+      pandaWrap.innerHTML = `<div class="panda-emoji">🐼</div><div class="panda-text">太棒了！</div>`;
+      container.appendChild(pandaWrap);
+      createConfetti();
+    }
+
+    function createConfetti() {
+      const colors = ['#667eea','#764ba2','#48bb78','#f6e05e','#fc8181'];
+      const container = document.getElementById('pandaCelebration');
+      if (!container) return;
+      for (let i = 0; i < 18; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.position = 'absolute';
+        confetti.style.left = Math.random()*80 + '%';
+        confetti.style.top = (Math.random()*20) + 'px';
+        confetti.style.width = '9px';
+        confetti.style.height = '9px';
+        confetti.style.background = colors[Math.floor(Math.random()*colors.length)];
+        confetti.style.borderRadius = '2px';
+        confetti.style.animation = 'confettiFall ' + (Math.random()*1.4 + 1.6) + 's linear forwards';
+        container.appendChild(confetti);
+        setTimeout(()=> { if(confetti.parentNode) confetti.parentNode.removeChild(confetti); }, 3200);
+      }
+    }
+
+    /* ========== Seleccionar respuesta ========= */
+    async function selectAnswer(index) {
+      if (answered && selectedAnswer === index) return;
+      const question = questions[currentQuestionIndex];
+      questionAttempts[question.id] = (questionAttempts[question.id] || 0) + 1;
+      const attemptsIndicator = document.getElementById('attemptsIndicator');
+      if (attemptsIndicator) attemptsIndicator.textContent = questionAttempts[question.id];
+      const isCorrect = index === correctAnswerIndex;
+      selectedAnswer = index;
+      const optionsGrid = document.getElementById('optionsGrid');
+      const buttons = optionsGrid ? optionsGrid.querySelectorAll('.option-button') : [];
+      buttons.forEach(btn => btn.disabled = true);
+      const selectedButton = document.getElementById(`option${index}`);
+      if (selectedButton) selectedButton.classList.add(isCorrect ? 'correct' : 'incorrect');
+      const feedback = document.getElementById('feedback');
+
+      if (isCorrect) {
+        const firstTry = questionAttempts[question.id] === 1;
+        if (firstTry && !firstTryCorrectByQuestion[question.id]) {
+          firstTryCorrectCount++;
+          firstTryCorrectByQuestion[question.id] = true;
+        }
+        answered = true;
+        if (feedback) { feedback.className = 'feedback success'; feedback.textContent = '¡Correcto!'; }
+        showPandaCelebration();
+        const nextBtn = document.getElementById('nextButton');
+        if (nextBtn) nextBtn.style.display = 'inline-block';
+        try {
+          await recordResult({
+            question_id: question.id,
+            attempts: questionAttempts[question.id],
+            correct: true,
+            timestamp: new Date().toISOString(),
+            game_session: gameSession,
+            first_try: firstTry
+          });
+        } catch (e) { console.error('recordResult fallo:', e); }
+      } else {
+        if (feedback) { feedback.className = 'feedback error'; feedback.textContent = 'Vuelve a intentarlo'; }
+        setTimeout(() => {
+          if (feedback) feedback.textContent = '';
+          if (selectedButton) selectedButton.classList.remove('incorrect');
+          shuffleOptions(question);
+          renderQuestion();
+          document.querySelectorAll('.option-button').forEach(btn => btn.disabled = false);
+          selectedAnswer = null;
+        }, 900);
+      }
+    }
+
+    function nextQuestion() {
+      currentQuestionIndex++;
+      shuffledOptions = [];
+      if (currentQuestionIndex < questions.length) renderQuestion();
+      else showResults();
+    }
+
+    function restartGame() {
+      currentQuestionIndex = 0;
+      gameSession = Date.now().toString();
+      questionAttempts = {};
+      firstTryCorrectCount = 0;
+      firstTryCorrectByQuestion = {};
+      answered = false;
+      selectedAnswer = null;
+      shuffledOptions = [];
+      renderQuestion();
+    }
+
+    /* ========== Pantalla final de resultados ========= */
+    function showResults() {
+      const content = document.getElementById('mainContainer');
+      const totalAttempts = Object.values(questionAttempts).reduce((a,b)=>a+b,0);
+      const perQuestionLines = questions.map((q, idx) => {
+        const attempts = questionAttempts[q.id] || 0;
+        return `<div style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:#fff;margin-bottom:8px;box-shadow:0 6px 18px rgba(12,20,40,0.04)"><div><strong>Pregunta ${idx+1} (${q.shortTitle}):</strong></div><div style="font-weight:700;color:#334155">${attempts}</div></div>`;
+      }).join('');
+
+      content.innerHTML = `
+        <div style="padding:26px;text-align:center">
+          <div style="font-size:64px">🐼🎉</div>
+          <h2 style="margin:8px 0 6px">¡Quiz completado!</h2>
+          <div style="margin-top:18px;text-align:left;max-width:720px;margin-left:auto;margin-right:auto">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:12px;background:linear-gradient(90deg,#f8fafc,#ffffff);box-shadow:0 10px 30px rgba(11,22,48,0.04);margin-bottom:12px">
+              <div>
+                <div style="font-size:13px;color:#94a3b8">Respuestas acertadas (1.º intento)</div>
+                <div style="font-size:28px;font-weight:800;color:#667eea">${firstTryCorrectCount}/${questions.length}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:13px;color:#94a3b8">Intentos totales</div>
+                <div style="font-size:22px;font-weight:700;color:#2d3748">${totalAttempts}</div>
+              </div>
+            </div>
+
+            <div style="font-size:15px;font-weight:700;margin-bottom:8px">Detalle intentos:</div>
+            ${perQuestionLines}
+          </div>
+
+          <div style="margin-top:18px;display:flex;gap:10px;justify-content:center">
+            <button id="playAgainBtn" class="next-button">Jugar de nuevo</button>
+            <button id="downloadCsvBtnResults" class="small-btn" style="padding:10px 12px;border-radius:10px">Exportar CSV</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('playAgainBtn').addEventListener('click', restartGame);
+      document.getElementById('downloadCsvBtnResults').addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz.csv'));
+
+      // Guardar resumen de sessió
+      const sessionSummary = {
+        game_session: gameSession,
+        date: (new Date()).toISOString(),
+        firstTryCorrectCount,
+        totalQuestions: questions.length,
+        attemptsByQuestion: questionAttempts,
+        user_name: localStorage.getItem('quiz_user_name')||'',
+        user_group: localStorage.getItem('quiz_user_group')||''
+      };
+      storeResultLocal({ session: sessionSummary });
+    }
+
+    /* ========== Admin & Password UI ========= */
+    const pwOverlay = document.getElementById('passwordOverlay');
+    const pwInput = document.getElementById('passwordInput');
+    const pwBtn = document.getElementById('passwordBtn');
+    const pwError = document.getElementById('passwordError');
+    const adminControls = document.getElementById('adminControls');
+    const userNameInput = document.getElementById('userName');
+    const userGroupInput = document.getElementById('userGroup');
+    const adminPanel = document.getElementById('adminPanel');
+    const adminIcon = document.getElementById('adminIcon');
+    const adminQuickBtn = document.getElementById('adminQuickBtn');
+
+    function prefillUserInfo(){
+      const storedName = localStorage.getItem('quiz_user_name') || '';
+      const storedGroup = localStorage.getItem('quiz_user_group') || '';
+      if(storedName && userNameInput) userNameInput.value = storedName;
+      if(storedGroup && userGroupInput) userGroupInput.value = storedGroup;
+    }
+
+    function showPasswordOverlay(){
+      prefillUserInfo();
+      pwOverlay.style.display = 'flex';
+      if(pwError) pwError.style.display = 'none';
+      setTimeout(()=> { if(userNameInput) userNameInput.focus(); }, 120);
+    }
+
+    function startGame(admin=false){
+      isAdminMode = admin;
+      if (isAdminMode) {
+        adminControls.style.visibility = 'visible';
+        adminControls.setAttribute('aria-hidden','false');
+        buildAdminAggregatedView();
+        adminPanel.style.display = 'block';
+      } else {
+        adminControls.style.visibility = 'hidden';
+        adminControls.setAttribute('aria-hidden','true');
+        adminPanel.style.display = 'none';
+        renderQuestion();
+      }
+      const name = normalizeInput(userNameInput.value || '');
+      const group = normalizeInput(userGroupInput.value || '');
+      if (name) localStorage.setItem('quiz_user_name', name);
+      if (group) localStorage.setItem('quiz_user_group', group);
+      pwOverlay.style.display = 'none';
+    }
+
+    if (pwBtn) pwBtn.addEventListener('click', ()=> {
+      const raw = pwInput ? pwInput.value || '' : '';
+      const val = normalizeInput(raw);
+      const name = normalizeInput(userNameInput.value || '');
+      const group = normalizeInput(userGroupInput.value || '');
+      if(!name || !group){
+        pwError.textContent = 'Por favor, introduce Nombre usuario y Grupo';
+        pwError.style.display = 'block';
+        setTimeout(()=> pwError.style.display = 'none', 3000);
+        return;
+      }
+      if(val === ADMIN_PASSWORD){ startGame(true); }
+      else if(val === STUDENT_PASSWORD){ startGame(false); }
+      else { pwError.textContent = 'Contraseña incorrecta o campos incompletos'; pwError.style.display = 'block'; setTimeout(()=> pwError.style.display = 'none', 2500); }
+    });
+
+    if(adminQuickBtn) adminQuickBtn.addEventListener('click', ()=> {
+      const v = prompt('Contraseña admin:') || '';
+      if(normalizeInput(v) === ADMIN_PASSWORD){ startGame(true); } else { alert('Contraseña admin incorrecta'); }
+    });
+
+    adminIcon.addEventListener('click', ()=> {
+      // togglear el panel pequeño
+      if(adminPanel.style.display === 'block'){ adminPanel.style.display = 'none'; } else { buildAdminAggregatedView(); adminPanel.style.display = 'block'; }
+    });
+
+    window.addEventListener('DOMContentLoaded', ()=> {
+      try{
+        console.log('DOM cargado — mostrando overlay de password...');
+        showPasswordOverlay();
+        window.__quiz = { getStoredResults, questions };
+      } catch(e){ console.error(e); }
+    });
+
+    /* ========== Admin aggregated view & stats ========= */
+    function buildAdminAggregatedView(){
+      const rows = getStoredResults();
+      const panel = adminPanel;
+      if(!rows || rows.length === 0){ panel.innerHTML = `<div style="padding:12px">No hay resultados todavía.</div>`; return; }
+
+      const explicitSessions = rows.filter(r=>r && r.session).map(r=>r.session).slice().reverse();
+      const responseRecords = rows.filter(r=>r && !r.session);
+
+      // synthesize sessions from responses
+      const sessionsById = {};
+      responseRecords.forEach(r => {
+        const sid = r.game_session || ('gen-' + (r.user_name || 'u') + '-' + (r.timestamp||''));
+        if(!sessionsById[sid]) sessionsById[sid] = { game_session: sid, date: r.timestamp || '', user_name: r.user_name || '', user_group: r.user_group || '', attemptsByQuestion: {}, firstTryCorrectCount:0, correctAnswers:0 };
+        const s = sessionsById[sid];
+        s.attemptsByQuestion[r.question_id] = Math.max(s.attemptsByQuestion[r.question_id] || 0, r.attempts || 0);
+        if(r.correct) s.correctAnswers = (s.correctAnswers||0) + 1;
+        if(r.first_try) s.firstTryCorrectCount = (s.firstTryCorrectCount||0) + 1;
+      });
+
+      const explicitIds = new Set(explicitSessions.map(s=>s.game_session));
+      const combined = explicitSessions.slice();
+      Object.values(sessionsById).forEach(s => { if(!explicitIds.has(s.game_session)) combined.unshift(s); });
+
+      let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="small-btn" id="exportAllCsv">Exportar CSV</button><button class="small-btn" id="clearResultsBtn">Borrar resultados locales</button></div>`;
+      html += `<div id="adminStats"></div><div style="margin-top:10px">`;
+      combined.forEach(sess => {
+        const dateStr = formatDateNice(sess.date);
+        const user = sess.user_name || 'Anónimo';
+        const group = sess.user_group || '';
+        const attemptsByQ = sess.attemptsByQuestion || {};
+        const detailHtml = questions.map((q, idx) => {
+          const a = attemptsByQ[q.id] || '-';
+          return `<div style="font-size:13px;color:#475569;margin-top:6px"><strong>Pregunta ${idx+1} (${q.shortTitle}):</strong> ${a}</div>`;
+        }).join('');
+        html += `
+          <div class="session-card" style="margin-bottom:10px;padding:10px;border-radius:8px;background:#fff">
+            <div style="font-weight:700;color:#0f172a">${user} ${group ? '· ' + group : ''}</div>
+            <div class="session-meta" style="font-size:13px;color:#475569">Fecha: ${dateStr}</div>
+            <div style="margin-top:8px">${detailHtml}</div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+      panel.innerHTML = html;
+
+      document.getElementById('exportAllCsv').addEventListener('click', ()=> exportCsv(getStoredResults(), 'resultados_quiz_all.csv'));
+      document.getElementById('clearResultsBtn').addEventListener('click', ()=>{
+        if(confirm('¿Borrar todos los resultados guardados localmente? Esta acción no se puede deshacer.')){
+          localStorage.removeItem(RESULTS_KEY);
+          buildAdminAggregatedView();
+        }
+      });
+
+      renderAdminStats(rows, combined);
+    }
+
+    function renderAdminStats(allRows, combinedSessions){
+      const statsContainer = document.getElementById('adminStats');
+      if(!statsContainer) return;
+      const responseRecords = allRows.filter(r => r && !r.session);
+      const explicitSessions = allRows.filter(r => r && r.session).map(r => r.session);
+
+      // total attempts per question
+      const totalAttemptsPerQuestion = {};
+      responseRecords.forEach(r => {
+        if(!r.question_id) return;
+        totalAttemptsPerQuestion[r.question_id] = (totalAttemptsPerQuestion[r.question_id] || 0) + (r.attempts || 0);
+      });
+      explicitSessions.forEach(s => {
+        if(!s.attemptsByQuestion) return;
+        Object.keys(s.attemptsByQuestion).forEach(qid => {
+          totalAttemptsPerQuestion[qid] = (totalAttemptsPerQuestion[qid] || 0) + (s.attemptsByQuestion[qid] || 0);
+        });
+      });
+
+      let worstQid = null; let worstAttempts = 0;
+      Object.keys(totalAttemptsPerQuestion).forEach(qid => {
+        if (totalAttemptsPerQuestion[qid] > worstAttempts) { worstAttempts = totalAttemptsPerQuestion[qid]; worstQid = qid; }
+      });
+
+      const firstTryCorrectsPerQuestion = {};
+      responseRecords.forEach(r => {
+        if(!r.question_id) return;
+        if(r.first_try) firstTryCorrectsPerQuestion[r.question_id] = (firstTryCorrectsPerQuestion[r.question_id] || 0) + 1;
+      });
+      let bestQid = null; let bestCount = 0;
+      Object.keys(firstTryCorrectsPerQuestion).forEach(qid => {
+        if (firstTryCorrectsPerQuestion[qid] > bestCount) { bestCount = firstTryCorrectsPerQuestion[qid]; bestQid = qid; }
+      });
+
+      const sessionsCount = explicitSessions.length || combinedSessions.length;
+      const sessionsByUser = {};
+      explicitSessions.forEach(s => {
+        const u = s.user_name || 'Anónimo';
+        sessionsByUser[u] = sessionsByUser[u] || new Set();
+        sessionsByUser[u].add(s.game_session || (s.date || Math.random()));
+      });
+      combinedSessions.forEach(s => {
+        const u = s.user_name || 'Anónimo';
+        sessionsByUser[u] = sessionsByUser[u] || new Set();
+        sessionsByUser[u].add(s.game_session || (s.date || Math.random()));
+      });
+      const uniqueUsers = Object.keys(sessionsByUser).length;
+      const avgGamesPerUser = uniqueUsers === 0 ? 0 : (sessionsCount / uniqueUsers);
+
+      const worstLabel = worstQid ? (questions.find(q=>q.id===worstQid)?.shortTitle || worstQid) : 'N/A';
+      const bestLabel = bestQid ? (questions.find(q=>q.id===bestQid)?.shortTitle || bestQid) : 'N/A';
+      const worstLabelDisplay = worstAttempts ? `${worstAttempts} intentos` : '-';
+      const bestCountDisplay = bestQid ? `${bestCount} aciertos (1.º intento)` : '-';
+
+      statsContainer.innerHTML = `
+        <div id="adminStatsInner" style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="min-width:220px;padding:12px;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+            <div style="font-size:12px;color:#94a3b8">Sesiones registradas</div>
+            <div style="font-weight:800;font-size:20px;color:#334155">${sessionsCount}</div>
+          </div>
+          <div style="min-width:220px;padding:12px;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+            <div style="font-size:12px;color:#94a3b8">Usuarios únicos</div>
+            <div style="font-weight:800;font-size:20px;color:#334155">${uniqueUsers}</div>
+          </div>
+          <div style="min-width:240px;padding:12px;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+            <div style="font-size:12px;color:#94a3b8">Media de partidas por usuario</div>
+            <div style="font-weight:800;font-size:20px;color:#334155">${avgGamesPerUser.toFixed(2)}</div>
+          </div>
+          <div style="min-width:260px;padding:12px;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+            <div style="font-size:12px;color:#94a3b8">Pregunta más fallada</div>
+            <div style="font-weight:800;font-size:18px;color:#b91c1c">${worstLabel} — ${worstLabelDisplay}</div>
+          </div>
+          <div style="min-width:260px;padding:12px;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(12,20,40,0.04)">
+            <div style="font-size:12px;color:#94a3b8">Pregunta más acertada</div>
+            <div style="font-weight:800;font-size:18px;color:#15803d">${bestLabel} — ${bestCountDisplay}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function formatDateNice(iso){ if(!iso) return '-'; try{ const d=new Date(iso); const opts={ weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }; const loc=navigator.language||'es-ES'; return d.toLocaleString(loc,opts); }catch(e){return iso;} }
+
+    function exportCsv(data, filename = 'resultados.csv'){
+      if(!data || !data.length){ alert('No hay datos para exportar'); return; }
+      const rows = [];
+      rows.push(['user_name','user_group','type','question','attempts','correct','first_try','timestamp','game_session']);
+      data.forEach(r=>{
+        if(r.session){
+          rows.push([r.session.user_name||'', r.session.user_group||'', 'session_summary', '', '', '', '', r.session.date||'', r.session.game_session||'']);
+        } else {
+          rows.push([r.user_name||'', r.user_group||'', 'respuesta', r.question_title||r.question_id||'', r.attempts||'', r.correct? '1':'0', r.first_try? '1':'0', r.timestamp||'', r.game_session||'']);
+        }
+      });
+      const csv = rows.map(r => r.map(cell => `"${String(cell||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    /* ========== Protección y debugging ========= */
+    window.addEventListener('error', function(ev){ console.error('Unhandled error:', ev.error || ev.message || ev); });
+
+    // Expose useful functions for debugging
+    window.restartGame = restartGame;
+    window.getStoredResults = getStoredResults;
+    window.buildAdminAggregatedView = buildAdminAggregatedView;
+
+  })();
+  </script>
 </body>
 </html>
